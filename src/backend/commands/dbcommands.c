@@ -116,7 +116,7 @@ static void movedb(const char *dbname, const char *tblspcname);
 static void movedb_failure_callback(int code, Datum arg);
 static bool get_db_info(const char *name, LOCKMODE lockmode,
 						Oid *dbIdP, Oid *ownerIdP,
-						int *encodingP, bool *dbIsTemplateP, bool *dbAllowConnP,
+						int *encodingP, bool *dbIsTemplateP, bool *dbAllowConnP, bool *dbHasLoginEvtP,
 						TransactionId *dbFrozenXidP, MultiXactId *dbMinMultiP,
 						Oid *dbTablespace, char **dbCollate, char **dbCtype, char **dbIculocale,
 						char *dbLocProvider,
@@ -679,6 +679,7 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 	char		src_locprovider = '\0';
 	char	   *src_collversion = NULL;
 	bool		src_istemplate;
+	bool		src_hasloginevt;
 	bool		src_allowconn;
 	TransactionId src_frozenxid = InvalidTransactionId;
 	MultiXactId src_minmxid = InvalidMultiXactId;
@@ -957,7 +958,7 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 
 	if (!get_db_info(dbtemplate, ShareLock,
 					 &src_dboid, &src_owner, &src_encoding,
-					 &src_istemplate, &src_allowconn,
+					 &src_istemplate, &src_allowconn, &src_hasloginevt,
 					 &src_frozenxid, &src_minmxid, &src_deftablespace,
 					 &src_collate, &src_ctype, &src_iculocale, &src_locprovider,
 					 &src_collversion))
@@ -1304,7 +1305,7 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 	new_record[Anum_pg_database_datlocprovider - 1] = CharGetDatum(dblocprovider);
 	new_record[Anum_pg_database_datistemplate - 1] = BoolGetDatum(dbistemplate);
 	new_record[Anum_pg_database_datallowconn - 1] = BoolGetDatum(dballowconnections);
-	new_record[Anum_pg_database_dathasloginevt - 1] = BoolGetDatum(false);
+	new_record[Anum_pg_database_dathasloginevt - 1] = BoolGetDatum(src_hasloginevt);
 	new_record[Anum_pg_database_datconnlimit - 1] = Int32GetDatum(dbconnlimit);
 	new_record[Anum_pg_database_datfrozenxid - 1] = TransactionIdGetDatum(src_frozenxid);
 	new_record[Anum_pg_database_datminmxid - 1] = TransactionIdGetDatum(src_minmxid);
@@ -1527,7 +1528,7 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	 */
 	pgdbrel = table_open(DatabaseRelationId, RowExclusiveLock);
 
-	if (!get_db_info(dbname, AccessExclusiveLock, &db_id, NULL, NULL,
+	if (!get_db_info(dbname, AccessExclusiveLock, &db_id, NULL, NULL, NULL,
 					 &db_istemplate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL))
 	{
 		if (!missing_ok)
@@ -1727,7 +1728,7 @@ RenameDatabase(const char *oldname, const char *newname)
 	 */
 	rel = table_open(DatabaseRelationId, RowExclusiveLock);
 
-	if (!get_db_info(oldname, AccessExclusiveLock, &db_id, NULL, NULL,
+	if (!get_db_info(oldname, AccessExclusiveLock, &db_id, NULL, NULL, NULL,
 					 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_DATABASE),
@@ -1837,7 +1838,7 @@ movedb(const char *dbname, const char *tblspcname)
 	 */
 	pgdbrel = table_open(DatabaseRelationId, RowExclusiveLock);
 
-	if (!get_db_info(dbname, AccessExclusiveLock, &db_id, NULL, NULL,
+	if (!get_db_info(dbname, AccessExclusiveLock, &db_id, NULL, NULL, NULL,
 					 NULL, NULL, NULL, NULL, &src_tblspcoid, NULL, NULL, NULL, NULL, NULL))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_DATABASE),
@@ -2598,7 +2599,7 @@ pg_database_collation_actual_version(PG_FUNCTION_ARGS)
 static bool
 get_db_info(const char *name, LOCKMODE lockmode,
 			Oid *dbIdP, Oid *ownerIdP,
-			int *encodingP, bool *dbIsTemplateP, bool *dbAllowConnP,
+			int *encodingP, bool *dbIsTemplateP, bool *dbAllowConnP, bool *dbHasLoginEvtP,
 			TransactionId *dbFrozenXidP, MultiXactId *dbMinMultiP,
 			Oid *dbTablespace, char **dbCollate, char **dbCtype, char **dbIculocale,
 			char *dbLocProvider,
@@ -2682,6 +2683,9 @@ get_db_info(const char *name, LOCKMODE lockmode,
 				/* allowed as template? */
 				if (dbIsTemplateP)
 					*dbIsTemplateP = dbform->datistemplate;
+				/* Has on login event trigger? */
+				if (dbHasLoginEvtP)
+					*dbHasLoginEvtP = dbform->dathasloginevt;
 				/* allowing connections? */
 				if (dbAllowConnP)
 					*dbAllowConnP = dbform->datallowconn;
