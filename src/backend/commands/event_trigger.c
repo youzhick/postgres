@@ -104,6 +104,7 @@ static void validate_table_rewrite_tags(const char *filtervar, List *taglist);
 static void EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata);
 static const char *stringify_grant_objtype(ObjectType objtype);
 static const char *stringify_adefprivs_objtype(ObjectType objtype);
+static void set_dathasloginevt(bool isActive);
 
 /*
  * Create an event trigger.
@@ -303,24 +304,7 @@ insert_event_trigger_tuple(const char *trigname, const char *eventname, Oid evtO
 	 * faster lookups in hot codepaths. Set the flag unless already True.
 	 */
 	if (strcmp(eventname, "login") == 0)
-	{
-		Form_pg_database db;
-		Relation	pg_db = table_open(DatabaseRelationId, RowExclusiveLock);
-
-		/* Set dathasloginevt flag in pg_database */
-		tuple = SearchSysCacheCopy1(DATABASEOID, ObjectIdGetDatum(MyDatabaseId));
-		if (!HeapTupleIsValid(tuple))
-			elog(ERROR, "cache lookup failed for database %u", MyDatabaseId);
-		db = (Form_pg_database) GETSTRUCT(tuple);
-		if (!db->dathasloginevt)
-		{
-			db->dathasloginevt = true;
-			CatalogTupleUpdate(pg_db, &tuple->t_self, tuple);
-			CommandCounterIncrement();
-		}
-		table_close(pg_db, RowExclusiveLock);
-		heap_freetuple(tuple);
-	}
+		set_dathasloginevt(true);
 
 	/* Depend on owner. */
 	recordDependencyOnOwner(EventTriggerRelationId, trigoid, evtOwner);
@@ -383,6 +367,28 @@ filter_list_to_array(List *filterlist)
 	return PointerGetDatum(construct_array_builtin(data, l, TEXTOID));
 }
 
+void
+set_dathasloginevt(bool isActive)
+{
+	Form_pg_database db;
+	Relation	pg_db = table_open(DatabaseRelationId, RowExclusiveLock);
+
+	/* Set dathasloginevt flag in pg_database */
+	HeapTuple	tuple;
+	tuple = SearchSysCacheCopy1(DATABASEOID, ObjectIdGetDatum(MyDatabaseId));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for database %u", MyDatabaseId);
+	db = (Form_pg_database) GETSTRUCT(tuple);
+	if (!db->dathasloginevt)
+	{
+		db->dathasloginevt = true;
+		CatalogTupleUpdate(pg_db, &tuple->t_self, tuple);
+		CommandCounterIncrement();
+	}
+	table_close(pg_db, RowExclusiveLock);
+	heap_freetuple(tuple);
+}
+
 /*
  * ALTER EVENT TRIGGER foo ENABLE|DISABLE|ENABLE ALWAYS|REPLICA
  */
@@ -416,6 +422,9 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	evtForm->evtenabled = tgenabled;
 
 	CatalogTupleUpdate(tgrel, &tup->t_self, tup);
+
+	if (strcmp(stmt->trigname, "on_login_trigger") == 0 && tgenabled != 'D')
+		set_dathasloginevt(true);
 
 	InvokeObjectPostAlterHook(EventTriggerRelationId,
 							  trigoid, 0);
