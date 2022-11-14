@@ -1528,8 +1528,8 @@ dropdb(const char *dbname, bool missing_ok, bool force)
 	 */
 	pgdbrel = table_open(DatabaseRelationId, RowExclusiveLock);
 
-	if (!get_db_info(dbname, AccessExclusiveLock, &db_id, NULL, NULL, NULL,
-					 &db_istemplate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL))
+	if (!get_db_info(dbname, AccessExclusiveLock, &db_id, NULL, NULL,
+					 &db_istemplate, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL))
 	{
 		if (!missing_ok)
 		{
