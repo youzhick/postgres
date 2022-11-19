@@ -592,7 +592,7 @@ filter_event_trigger(CommandTag tag, EventTriggerCacheItem *item)
 static List *
 EventTriggerCommonSetup(Node *parsetree,
 						EventTriggerEvent event, const char *eventstr,
-						EventTriggerData *trigdata)
+						EventTriggerData *trigdata, bool unfiltered)
 {
 	CommandTag	tag;
 	List	   *cachelist;
@@ -660,7 +660,7 @@ EventTriggerCommonSetup(Node *parsetree,
 	{
 		EventTriggerCacheItem *item = lfirst(lc);
 
-		if (filter_event_trigger(tag, item))
+		if (unfiltered || filter_event_trigger(tag, item))
 		{
 			/* We must plan to fire this trigger. */
 			runlist = lappend_oid(runlist, item->fnoid);
@@ -710,7 +710,7 @@ EventTriggerDDLCommandStart(Node *parsetree)
 	runlist = EventTriggerCommonSetup(parsetree,
 									  EVT_DDLCommandStart,
 									  "ddl_command_start",
-									  &trigdata);
+									  &trigdata, false);
 	if (runlist == NIL)
 		return;
 
@@ -758,7 +758,7 @@ EventTriggerDDLCommandEnd(Node *parsetree)
 
 	runlist = EventTriggerCommonSetup(parsetree,
 									  EVT_DDLCommandEnd, "ddl_command_end",
-									  &trigdata);
+									  &trigdata, false);
 	if (runlist == NIL)
 		return;
 
@@ -804,7 +804,7 @@ EventTriggerSQLDrop(Node *parsetree)
 
 	runlist = EventTriggerCommonSetup(parsetree,
 									  EVT_SQLDrop, "sql_drop",
-									  &trigdata);
+									  &trigdata, false);
 
 	/*
 	 * Nothing to do if run list is empty.  Note this typically can't happen,
@@ -887,7 +887,7 @@ EventTriggerOnLogin(void)
 	{
 		runlist = EventTriggerCommonSetup(NULL,
 										  EVT_Login, "login",
-										  &trigdata);
+										  &trigdata, false);
 
 		if (runlist != NIL)
 		{
@@ -933,7 +933,7 @@ EventTriggerOnLogin(void)
 				 */
 				runlist = EventTriggerCommonSetup(NULL,
 												  EVT_Login, "login",
-												  &trigdata);
+												  &trigdata, true);
 				if (runlist == NIL)	/* list is still empty, so clear the
 										 * flag */
 				{
@@ -980,7 +980,7 @@ EventTriggerTableRewrite(Node *parsetree, Oid tableOid, int reason)
 	runlist = EventTriggerCommonSetup(parsetree,
 									  EVT_TableRewrite,
 									  "table_rewrite",
-									  &trigdata);
+									  &trigdata, false);
 	if (runlist == NIL)
 		return;
 
