@@ -385,7 +385,7 @@ set_dathasloginevt(bool isActive)
 	db = (Form_pg_database) GETSTRUCT(tuple);
 	if (!db->dathasloginevt)
 	{
-		db->dathasloginevt = true;
+		db->dathasloginevt = isActive;
 		CatalogTupleUpdate(pg_db, &tuple->t_self, tuple);
 		CommandCounterIncrement();
 	}
