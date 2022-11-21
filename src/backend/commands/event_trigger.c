@@ -168,6 +168,10 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 	else if (strcmp(stmt->eventname, "table_rewrite") == 0
 			 && tags != NULL)
 		validate_table_rewrite_tags("tag", tags);
+	else if (strcmp(stmt->eventname, "login") == 0 && tags != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("Tag filtering is not supported for login event trigger")));
 
 	/*
 	 * Give user a nice error message if an event trigger of the same name
