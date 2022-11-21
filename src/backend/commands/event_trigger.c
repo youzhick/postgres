@@ -427,7 +427,7 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 
 	CatalogTupleUpdate(tgrel, &tup->t_self, tup);
 
-	if (strcmp(stmt->trigname, "on_login_trigger") == 0 && tgenabled != 'D')
+	if (strcmp(stmt->trigname, "on_login_trigger") == 0 && tgenabled != TRIGGER_DISABLED)
 		set_dathasloginevt(true);
 
 	InvokeObjectPostAlterHook(EventTriggerRelationId,
